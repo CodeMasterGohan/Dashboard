@@ -3,13 +3,22 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { PluginDefinition, EventType, PluginEventPayload, PluginContext, ServiceEntry } from './src/types.ts';
 
-const DATA_FILE = path.join(process.cwd(), 'services.json');
+const DATA_DIR = path.join(process.cwd(), 'data');
+const DATA_FILE = path.join(DATA_DIR, 'services.json');
 
 export class PluginEngine {
   private plugins: PluginDefinition[] = [];
   private services: ServiceEntry[] = [];
 
   constructor() {
+    // Ensure data directory exists
+    if (!fs.existsSync(DATA_DIR)) {
+      try {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      } catch (e) {
+        console.error('Failed to create data directory:', e);
+      }
+    }
     this.loadState();
   }
 

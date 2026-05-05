@@ -43,6 +43,12 @@ The system is split into two primary layers seamlessly integrated through Expres
 
 ### Running the Application
 
+**Docker Compose (Recommended for Production)**
+```bash
+docker-compose up -d
+```
+*Note: Make sure your `.env` is populated if you are passing it through via docker-compose (you can uncomment the GEMINI_API_KEY environment variable in `docker-compose.yml`), or pass them directly.*
+
 **Development Mode (Hot Reloading + TSX)**
 ```bash
 npm run dev

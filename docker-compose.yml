@@ -1,0 +1,15 @@
+services:
+  dashboard:
+    build: https://github.com/CodeMasterGohan/Dashboard.git
+    container_name: dashboard
+    ports:
+      - "3000:3000"
+    volumes:
+      # Required for the DockerDiscovery plugin to read container labels
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Persist manual service entries across container restarts
+      - ./data:/app/data
+    environment:
+      - NODE_ENV=production
+      # - GEMINI_API_KEY=your_api_key_here # Uncomment or pass from .env file
+    restart: unless-stopped
