@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Search, Server, Globe, Trash2, Cpu, Activity, RefreshCw, Bird } from 'lucide-react';
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, arrayMove, rectSortingStrategy } from '@dnd-kit/sortable';
+import { SortableServiceCard } from './components/SortableServiceCard.tsx';
 
 interface Service {
   id: string;
@@ -15,6 +18,7 @@ interface Service {
 
 export default function App() {
   const [services, setServices] = useState<Service[]>([]);
+  const [metrics, setMetrics] = useState({ cpu: '0.0', mem: '0.0', memUsedGB: '0.0', memTotalGB: '0.0' });
   const [search, setSearch] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [newUrl, setNewUrl] = useState('');
@@ -32,10 +36,24 @@ export default function App() {
     }
   };
 
+  const fetchMetrics = async () => {
+    try {
+      const res = await fetch('/api/metrics');
+      const data = await res.json();
+      setMetrics(data);
+    } catch (err) {
+      console.error('Failed to load metrics', err);
+    }
+  };
+
   useEffect(() => {
     fetchServices();
+    fetchMetrics();
     // Poll every 10s for updates (metadata enrichment takes time)
-    const interval = setInterval(fetchServices, 10000);
+    const interval = setInterval(() => {
+      fetchServices();
+      fetchMetrics();
+    }, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -62,6 +80,34 @@ export default function App() {
       setServices(services.filter(s => s.id !== id));
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (active.id !== over?.id) {
+      setServices((items) => {
+        const oldIndex = items.findIndex((i) => i.id === active.id);
+        const newIndex = items.findIndex((i) => i.id === over?.id);
+        const newArray = arrayMove(items, oldIndex, newIndex);
+        
+        // Save the new sort order via API
+        fetch('/api/services/reorder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reorderedIds: newArray.map(s => s.id) })
+        }).catch(err => console.error("Reorder failed", err));
+
+        return newArray;
+      });
     }
   };
 
@@ -126,12 +172,12 @@ export default function App() {
               <p className="text-[10px] text-gray-500 tracking-widest font-bold mb-3">SYSTEM METRICS</p>
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <div className="flex justify-between text-[10px] mb-1"><span>CPU</span><span>NOMINAL</span></div>
-                  <div className="h-1 bg-white/5 w-full rounded-full overflow-hidden"><div className="h-full bg-emerald-500" style={{ width: '15%' }}></div></div>
+                  <div className="flex justify-between text-[10px] mb-1"><span>CPU</span><span>{metrics.cpu}%</span></div>
+                  <div className="h-1 bg-white/5 w-full rounded-full overflow-hidden"><div className="h-full bg-emerald-500" style={{ width: `${metrics.cpu}%` }}></div></div>
                 </div>
                 <div className="space-y-1">
-                  <div className="flex justify-between text-[10px] mb-1"><span>MEM</span><span>NOMINAL</span></div>
-                  <div className="h-1 bg-white/5 w-full rounded-full overflow-hidden"><div className="h-full bg-indigo-500" style={{ width: '25%' }}></div></div>
+                  <div className="flex justify-between text-[10px] mb-1"><span>MEM</span><span>{metrics.memUsedGB}GB / {metrics.memTotalGB}GB</span></div>
+                  <div className="h-1 bg-white/5 w-full rounded-full overflow-hidden"><div className="h-full bg-indigo-500" style={{ width: `${metrics.mem}%` }}></div></div>
                 </div>
               </div>
             </div>
@@ -170,87 +216,36 @@ export default function App() {
               <p className="mt-2 text-xs text-gray-600">Awaiting Service Discovery Payload</p>
             </div>
           ) : (
-            <div className="space-y-10">
-              {Object.entries(groups).map(([group, svcs]) => (
-                <section key={group}>
-                  <h2 className="text-[11px] font-bold tracking-[0.25em] text-indigo-400 uppercase mb-4 flex items-center gap-3">
-                    <span>{group}</span>
-                    <span className="h-px flex-1 bg-white/5"></span>
-                  </h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {svcs.map(service => (
-                      <div 
-                        key={service.id}
-                        className="bg-[#111111] border border-white/10 p-4 rounded-lg relative group transition-all hover:bg-white/5"
-                      >
-                        <div className="flex justify-between items-start mb-3">
-                          <div className="w-10 h-10 bg-white/5 rounded border border-white/10 flex items-center justify-center font-serif text-lg overflow-hidden shrink-0">
-                            {service.icon ? (
-                              <img src={service.icon} alt={service.name} className="w-full h-full object-contain p-1" />
-                            ) : (
-                              <span className="text-gray-500">{service.name.substring(0, 2)}</span>
-                            )}
-                          </div>
-                          <div className="flex gap-1 items-center flex-wrap justify-end">
-                            {service.metadata?.aiEnriched && (
-                              <span className="text-[8px] bg-purple-900/30 text-purple-300 px-2 py-0.5 rounded tracking-tighter uppercase font-bold border border-purple-500/30">
-                                AI-Enriched
-                              </span>
-                            )}
-                            <span className={`text-[8px] px-2 py-0.5 rounded tracking-tighter uppercase font-bold border ${
-                              service.source === 'docker' ? 'bg-indigo-900/50 text-indigo-300 border-indigo-500/30' : 'bg-gray-800 text-gray-400 border-white/10'
-                            }`}>
-                              {service.source}
-                            </span>
-                            {service.source === 'manual' && (
-                              <button 
-                                onClick={(e) => { e.preventDefault(); handleDelete(service.id); }}
-                                className="ml-1 text-gray-600 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-                                title="Remove Service"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        
-                        <a href={service.url} target="_blank" rel="noreferrer" className="block outline-none">
-                          <h3 className="text-white text-sm font-bold group-hover:text-indigo-400 transition-colors">{service.name}</h3>
-                          <p className="text-[11px] text-gray-500 mt-1 leading-relaxed line-clamp-2 min-h-[32px]">
-                            {service.description || 'Awaiting telemetry...'}
-                          </p>
-                        </a>
-                        
-                        <div className="mt-4 pt-3 border-t border-white/5 flex justify-between items-center">
-                          <span className={`text-[9px] uppercase font-bold ${
-                            service.status === 'online' ? 'text-emerald-500' :
-                            service.status === 'offline' ? 'text-red-500' : 'text-gray-500'
-                          }`}>
-                            {service.status === 'online' ? 'Healthy' : service.status === 'offline' ? 'Offline' : 'Unknown'}
-                          </span>
-                          {service.url && (
-                             <span className="text-[9px] text-gray-600 max-w-[120px] truncate">
-                               {service.url.replace(/^https?:\/\//, '')}
-                             </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <div className="space-y-10">
+                {Object.entries(groups).map(([group, svcs]) => (
+                  <section key={group}>
+                    <h2 className="text-[11px] font-bold tracking-[0.25em] text-indigo-400 uppercase mb-4 flex items-center gap-3">
+                      <span>{group}</span>
+                      <span className="h-px flex-1 bg-white/5"></span>
+                    </h2>
+                    <SortableContext items={svcs.map(s => s.id)} strategy={rectSortingStrategy}>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {svcs.map(service => (
+                          <SortableServiceCard key={service.id} service={service} handleDelete={handleDelete} />
+                        ))}
 
-                    {/* Add New Placeholder per group */}
-                    <button 
-                      onClick={() => setShowAdd(true)}
-                      className="bg-[#111111] border border-white/10 p-4 rounded-lg border-dashed border-white/20 flex flex-col items-center justify-center text-center py-8 group hover:bg-white/5 transition-colors cursor-pointer"
-                    >
-                      <div className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                        <span className="text-lg text-gray-500">+</span>
+                        {/* Add New Placeholder per group */}
+                        <button 
+                          onClick={() => setShowAdd(true)}
+                          className="bg-[#111111] border border-white/10 p-4 rounded-lg border-dashed border-white/20 flex flex-col items-center justify-center text-center py-8 group hover:bg-white/5 transition-colors cursor-pointer"
+                        >
+                          <div className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                            <span className="text-lg text-gray-500">+</span>
+                          </div>
+                          <p className="text-[10px] tracking-widest font-bold text-gray-500 uppercase">Define Entry</p>
+                        </button>
                       </div>
-                      <p className="text-[10px] tracking-widest font-bold text-gray-500 uppercase">Define Entry</p>
-                    </button>
-                  </div>
-                </section>
-              ))}
-            </div>
+                    </SortableContext>
+                  </section>
+                ))}
+              </div>
+            </DndContext>
           )}
         </div>
 

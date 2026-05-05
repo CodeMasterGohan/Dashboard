@@ -29,14 +29,20 @@ export const coreServicePlugin: PluginDefinition = {
       // Actually add the service
       const input = payload.input as ServiceEntry;
       if (!input.id) input.id = uuidv4();
-      input.createdAt = input.createdAt || Date.now();
-      input.updatedAt = input.updatedAt || Date.now();
       
-      ctx.addService(input);
-      
-      // Kick off metadata fetch synchronously but without awaiting if it takes long,
-      // actually we await to keep event order, but emit is bounded.
-      await ctx.emit('METADATA_FETCH_START', { service: input });
+      const existing = ctx.getServices().find(s => s.id === input.id);
+      if (!existing) {
+        input.createdAt = input.createdAt || Date.now();
+        input.updatedAt = input.updatedAt || Date.now();
+        input.order = input.order ?? ctx.getServices().length;
+        ctx.addService(input);
+        
+        // Kick off metadata fetch synchronously but without awaiting if it takes long,
+        // actually we await to keep event order, but emit is bounded.
+        if(input.url) {
+          await ctx.emit('METADATA_FETCH_START', { service: input });
+        }
+      }
     }
   }
 };
@@ -113,13 +119,28 @@ export const dockerDiscoveryPlugin: PluginDefinition = {
       if (!ctx.hasCapability('docker:read')) return;
       try {
         const docker = new Docker({ socketPath: '/var/run/docker.sock' });
-        const containers = await docker.listContainers();
-        await ctx.emit('DOCKER_DISCOVERED', { containers });
+        
+        const pollDocker = async () => {
+          try {
+            const containers = await docker.listContainers({ all: true });
+            await ctx.emit('DOCKER_DISCOVERED', { containers });
+          } catch(e) {
+            console.warn('Docker poll error:', e);
+          }
+        };
+
+        // Poll immediately and then every 15s
+        await pollDocker();
+        setInterval(pollDocker, 15000);
+
       } catch (e) {
-        console.warn('Docker discovery failed (expected if not running in Docker or lacking socket access):', (e as Error).message);
+        console.warn('Docker setup failed:', (e as Error).message);
       }
     },
     DOCKER_DISCOVERED: async ({ containers }, ctx) => {
+      const currentServices = ctx.getServices();
+      const dockerServiceIds = new Set<string>();
+
       for (const container of containers) {
         const labels = container.Labels || {};
         const enabled = labels['homepage.enabled'] === 'true';
@@ -127,21 +148,39 @@ export const dockerDiscoveryPlugin: PluginDefinition = {
           const name = labels['homepage.name'] || container.Names[0].replace('/', '');
           const url = labels['homepage.url'] || '';
           const group = labels['homepage.group'] || 'Docker';
+          const status = container.State === 'running' ? 'online' : (container.State === 'exited' ? 'offline' : 'unknown');
           
-          await ctx.emit('SERVICE_REGISTER', {
-            input: {
-              id: container.Id,
-              name,
-              url,
-              group,
-              status: container.State === 'running' ? 'online' : 'offline',
-              source: 'docker',
-              createdAt: Date.now(),
-              updatedAt: Date.now()
-            },
-            source: 'docker'
-          });
+          dockerServiceIds.add(container.Id);
+
+          const existing = currentServices.find(s => s.id === container.Id);
+          if (existing) {
+             if (existing.name !== name || existing.url !== url || existing.status !== status || existing.group !== group) {
+                ctx.updateService(existing.id, { name, url, status, group });
+             }
+          } else {
+             await ctx.emit('SERVICE_REGISTER', {
+               input: {
+                 id: container.Id,
+                 name,
+                 url,
+                 group,
+                 status,
+                 source: 'docker',
+                 createdAt: Date.now(),
+                 updatedAt: Date.now(),
+                 order: currentServices.length
+               },
+               source: 'docker'
+             });
+          }
         }
+      }
+      
+      // Cleanup old docker services that no longer exist
+      for (const s of currentServices) {
+         if (s.source === 'docker' && !dockerServiceIds.has(s.id)) {
+            ctx.removeService(s.id);
+         }
       }
     }
   }

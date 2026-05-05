@@ -1,6 +1,7 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
+import os from 'os';
 import { PluginEngine } from './pluginEngine.ts';
 import { 
   coreServicePlugin, 
@@ -28,7 +29,35 @@ engine.emit('ON_START', {}).catch(console.error);
 
 // API Routes
 app.get('/api/services', (req, res) => {
-  res.json(engine.getServices());
+  res.json(engine.getServices().sort((a, b) => (a.order || 0) - (b.order || 0)));
+});
+
+app.post('/api/services/reorder', (req, res) => {
+  const { reorderedIds } = req.body;
+  if (Array.isArray(reorderedIds)) {
+    reorderedIds.forEach((id: string, index: number) => {
+      engine.getContext(coreServicePlugin).updateService(id, { order: index });
+    });
+  }
+  res.json({ success: true });
+});
+
+app.get('/api/metrics', (req, res) => {
+  const totalMem = os.totalmem();
+  const freeMem = os.freemem();
+  const usedMem = totalMem - freeMem;
+  const memPercent = (usedMem / totalMem) * 100;
+  
+  const cpus = os.cpus();
+  const cpuLoad = os.loadavg()[0];
+  const cpuPercent = cpus && cpus.length > 0 ? (cpuLoad / cpus.length) * 100 : 0;
+
+  res.json({
+    cpu: Math.min(cpuPercent, 100).toFixed(1),
+    mem: memPercent.toFixed(1),
+    memUsedGB: (usedMem / 1024 / 1024 / 1024).toFixed(1),
+    memTotalGB: (totalMem / 1024 / 1024 / 1024).toFixed(1)
+  });
 });
 
 app.post('/api/services', async (req, res) => {

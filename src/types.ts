@@ -23,6 +23,7 @@ export interface ServiceEntry {
   metadata?: Record<string, any>;
   createdAt: number;
   updatedAt: number;
+  order?: number;
 }
 
 export type EventType =
