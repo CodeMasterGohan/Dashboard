@@ -1,5 +1,5 @@
 {
-  "name": "Osprey Dashboard",
+  "name": "Dashboard",
   "description": "A self-hosted, scalable dashboard with a robust plugin architecture, Docker auto-discovery, and AI service enrichment.",
   "requestFramePermissions": [],
   "majorCapabilities": []

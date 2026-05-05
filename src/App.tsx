@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Search, Server, Globe, Trash2, Cpu, Activity, RefreshCw } from 'lucide-react';
+import { Plus, Search, Server, Globe, Trash2, Cpu, Activity, RefreshCw, Bird } from 'lucide-react';
 
 interface Service {
   id: string;
@@ -83,8 +83,10 @@ export default function App() {
       <aside className="w-64 flex-shrink-0 border-r border-white/10 bg-[#0d0d0d] flex flex-col hidden md:flex">
         <div className="p-6">
           <div className="flex items-center gap-2 mb-8">
-            <div className="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center font-bold text-white">O</div>
-            <h1 className="text-sm font-bold tracking-widest text-white uppercase italic">Osprey</h1>
+            <div className="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center font-bold text-white shadow-[0_0_15px_rgba(79,70,229,0.5)]">
+               <Bird size={18} />
+            </div>
+            <h1 className="text-sm font-bold tracking-widest text-white uppercase italic">Dashboard</h1>
           </div>
           
           <div className="relative mb-6">
@@ -135,22 +137,13 @@ export default function App() {
             </div>
           </nav>
         </div>
-        <div className="mt-auto p-4 border-t border-white/5 bg-black/20">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded bg-white/5 border border-white/10 flex items-center justify-center font-bold text-gray-500">A</div>
-            <div>
-              <p className="text-[11px] font-bold text-white">ADMIN_01</p>
-              <p className="text-[9px] text-gray-500">PROD_CLUSTER</p>
-            </div>
-          </div>
-        </div>
       </aside>
 
       {/* MAIN CONTENT */}
       <main className="flex-1 flex flex-col bg-[#050505] overflow-hidden">
         <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 bg-[#0a0a0a]/50 flex-shrink-0">
           <div className="flex items-center gap-6">
-            <span className="text-[10px] tracking-widest font-bold text-gray-500">OSPREY DASHBOARD</span>
+            <span className="text-[10px] tracking-widest font-bold text-gray-500">HOMEPAGE DASHBOARD</span>
             <span className="flex items-center gap-2 text-[10px] tracking-widest font-bold text-emerald-500">
               <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></span> ALL SYSTEMS NOMINAL
             </span>
