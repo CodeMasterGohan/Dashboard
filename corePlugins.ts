@@ -1,6 +1,6 @@
 import * as cheerio from 'cheerio';
 import { v4 as uuidv4 } from 'uuid';
-import { PluginDefinition, ServiceEntry } from './src/types.ts';
+import type { PluginDefinition, ServiceEntry } from './src/types.ts';
 import Docker from 'dockerode';
 import { GoogleGenAI } from '@google/genai';
 
